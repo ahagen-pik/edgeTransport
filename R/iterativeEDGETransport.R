@@ -14,6 +14,8 @@ iterativeEdgeTransport <- function() {
   #############################################################
   ## Settings
   #############################################################
+  # bind variables locally to prevent NSE notes in R CMD CHECK
+  period <- value <- unit <- univocalName <- iteration <- type <- variable <- . <- NULL
   cfg <- sumWeight <- weight <- region <- ..cols <- vehicleType <- technology <- NULL
 
   # Set paths to folders
@@ -96,9 +98,6 @@ iterativeEdgeTransport <- function() {
   #############################################################
   ## Load input data via mrtransport
   #############################################################
-  # bind variables locally to prevent NSE notes in R CMD CHECK
-  period <- value <- unit <- univocalName <- iteration <- type <- variable <- . <- NULL
-
 
   numberOfRegions <- length(gdx::readGDX(gdxPath, "all_regi"))
   iterationNumber <- as.vector(gdxrrw::rgdx(gdxPath, list(name = "o_iterationNumber"))$val)
@@ -275,6 +274,7 @@ iterativeEdgeTransport <- function() {
     scenSpecPrefTrends = scenSpecPrefTrends,
     scenSpecLoadFactor = scenSpecInputData$scenSpecLoadFactor,
     scenSpecEnIntensity = scenSpecInputData$scenSpecEnIntensity,
+    CAPEXandNonFuelOPEX = scenSpecInputData$CAPEXandNonFuelOPEX,
     combinedCAPEXandOPEX = scenSpecInputData$combinedCAPEXandOPEX,
     upfrontCAPEXtrackedFleet = scenSpecInputData$upfrontCAPEXtrackedFleet,
     initialIncoCosts = scenSpecInputData$initialIncoCosts,
