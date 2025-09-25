@@ -1,9 +1,8 @@
 #' Function to load a parameter set for a specific scenario(combination) from the csv file in the package
 #' @author Alex K. Hagen
 #' @param SSPs SSP scenarios
-#' @param tramsportPolS transport policy scenarios
+#' @param transportPolS transport policy scenarios
 #' @returns list with different input data sets
-
 
 toolLoadScenParIncoCost <- function(SSPs, transportPolS) {
   # Transport policy scenario inconvenience cost factors
