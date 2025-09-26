@@ -95,6 +95,8 @@ iterativeEdgeTransport <- function() {
   # share of electricity in Hybrid electric vehicles
   hybridElecShare <- commonParams$hybridElecShare
 
+  helpers <- toolLoadHelpers()
+
   #############################################################
   ## Load fuel prices from REMIND and deaggregate if needed
   #############################################################
@@ -106,7 +108,7 @@ iterativeEdgeTransport <- function() {
   ## from REMIND
   REMINDfuelCosts <- toolLoadREMINDfuelCosts(gdxPath = gdxPath,
                                              hybridElecShare = hybridElecShare,
-                                             helpers = inputs$helpers,
+                                             helpers = helpers,
                                              transportFolder = file.path(".", edgeTransportFolder),
                                              iterationNumber = iterationNumber)
 
@@ -117,7 +119,7 @@ iterativeEdgeTransport <- function() {
     TestIND <- copy(REMINDfuelCosts)[region == "IND"]
 
     setnames(REMINDfuelCosts, "region", "regionCode12")
-    REMINDfuelCosts <- merge(REMINDfuelCosts, unique(inputs$helpers$regionmappingISOto21to12[, c("regionCode12", "regionCode21")]),
+    REMINDfuelCosts <- merge(REMINDfuelCosts, unique(helpers$regionmappingISOto21to12[, c("regionCode12", "regionCode21")]),
                                   by = "regionCode12", allow.cartesian = TRUE)
     REMINDfuelCosts[, "regionCode12" := NULL]
     setnames(REMINDfuelCosts, "regionCode21", "region")
@@ -223,12 +225,11 @@ iterativeEdgeTransport <- function() {
 
   if (dir.exists(file.path(edgeTransportFolder))) {
 
-    input <- toolReLoadInputs(edgeTransportFolder)
+    inputs <- toolReLoadInputs(edgeTransportFolder)
 
-    helpers = input$helpers
-    genModelPar = input$genModelPar
-    RDSinputs = input$RDSinputs
-    combinedCAPEXandOPEX <- rbind(RDSinputs$CAPEXandNonFuelOPEX, REMINDfuelCost)
+    genModelPar = inputs$genModelPar
+    RDSinputs = inputs$RDSinputs
+    combinedCAPEXandOPEX <- rbind(RDSinputs$CAPEXandNonFuelOPEX, REMINDfuelCosts)
     senParIncoCosts <- toolLoadScenParIncoCost(SSPscen, transportPolScen)
 
     # collect all finished input data
