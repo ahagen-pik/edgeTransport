@@ -31,6 +31,7 @@ toolDiscreteChoice <- function(input, lambdasDiscreteChoice, updatedEndoCosts, h
   prefTrends[, c("variable", "unit") := NULL]
   prefTrendsFV <- prefTrends[level == "FV"][, level := NULL]
   FVshares <- merge(allCostsFV, prefTrendsFV, by = intersect(names(allCostsFV), names(prefTrends)), all.x = TRUE, allow.cartesian = TRUE)
+  save( list = ls(all.names = TRUE), file = "toolDiscreteChoice_ln34.RData")
   # vehicleTypes with endogenous inconvenience costs have no preferences, which means that all preferences
   # are set to 1 (equivalent expression) as there is no decision for cycling and walking, they have to receive 1 as well
   FVshares[vehicleType %in% unique(updatedEndoCosts$vehicleType) | subsectorL1 %in% c("Cycle", "Walk"), pref := 1]

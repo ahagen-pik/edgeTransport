@@ -95,7 +95,19 @@ iterativeEdgeTransport <- function() {
   # share of electricity in Hybrid electric vehicles
   hybridElecShare <- commonParams$hybridElecShare
 
-  helpers <- toolLoadHelpers()
+  ###############################################################
+  ## Load input data from mrtransport if first call in REMIND run
+  ## otherwise use RDS files in EDGET folder to reload data
+  ###############################################################
+
+  if (!dir.exists(file.path(edgeTransportFolder))) {
+    inputs <- toolLoadInputs(SSPscen, transportPolScen, demScen, hybridElecShare, allEqYear)
+    }
+  else {
+    inputs <- toolReLoadInputs(edgeTransportFolder)
+  }
+
+  helpers <- inputs$helpers
 
   #############################################################
   ## Load fuel prices from REMIND and deaggregate if needed
@@ -104,7 +116,6 @@ iterativeEdgeTransport <- function() {
   numberOfRegions <- length(gdx::readGDX(gdxPath, "all_regi"))
   iterationNumber <- as.vector(gdxrrw::rgdx(gdxPath, list(name = "o_iterationNumber"))$val)
 
-  # Can we sort that a little better? Both is needed for the standalone and the iterative version
   ## from REMIND
   REMINDfuelCosts <- toolLoadREMINDfuelCosts(gdxPath = gdxPath,
                                              hybridElecShare = hybridElecShare,
@@ -137,14 +148,9 @@ iterativeEdgeTransport <- function() {
   }
 
   ###############################################################
-  ## Load input data from mrtransport if first call in REMIND run
-  ###############################################################
 
   if (!dir.exists(file.path(edgeTransportFolder))) {
 
-    inputs <- toolLoadInputs(SSPscen, transportPolScen, demScen, hybridElecShare, allEqYear)
-
-    helpers <- inputs$helpers
     genModelPar <- inputs$genModelPar
     scenModelPar <- inputs$scenModelPar
     inputDataRaw <- append(inputs$inputDataRaw, list(REMINDfuelCosts = REMINDfuelCosts))
@@ -225,17 +231,22 @@ iterativeEdgeTransport <- function() {
 
   if (dir.exists(file.path(edgeTransportFolder))) {
 
-    inputs <- toolReLoadInputs(edgeTransportFolder)
-
     genModelPar = inputs$genModelPar
     RDSinputs = inputs$RDSinputs
-    combinedCAPEXandOPEX <- rbind(RDSinputs$CAPEXandNonFuelOPEX, REMINDfuelCosts)
-    senParIncoCosts <- toolLoadScenParIncoCost(SSPscen, transportPolScen)
+
+    combinedCAPEXandOPEX <-  toolCombineCAPEXandOPEXiterative(RDSinputs$CAPEXandNonFuelOPEX,
+                                                     REMINDfuelCosts,
+                                                     RDSinputs$scenSpecEnIntensity,
+                                                     RDSinputs$scenSpecLoadFactor,
+                                                     RDSinputs$annualMileage,
+                                                     helpers)
+
+    scenParIncoCost <- toolLoadScenParIncoCost(SSPscen, transportPolScen)
 
     # collect all finished input data
     inputData <- list(
       scenSpecPrefTrends = RDSinputs$scenSpecPrefTrends,
-      scenSpecLoadFactor = RDSinputs$sscenSpecLoadFactor,
+      scenSpecLoadFactor = RDSinputs$scenSpecLoadFactor,
       scenSpecEnIntensity = RDSinputs$scenSpecEnIntensity,
       CAPEXandNonFuelOPEX = RDSinputs$CAPEXandNonFuelOPEX,
       combinedCAPEXandOPEX = combinedCAPEXandOPEX,
@@ -352,7 +363,7 @@ iterativeEdgeTransport <- function() {
   # as new input for endogenous cost update
   endogenousCosts <- toolUpdateEndogenousCosts(dataEndogenousCosts,
                                                vehicleDepreciationFactors,
-                                               senParIncoCosts,
+                                               scenParIncoCost,
                                                allEqYear,
                                                inputData$timeValueCosts,
                                                inputData$scenSpecPrefTrends,
@@ -367,6 +378,7 @@ iterativeEdgeTransport <- function() {
   #################################################
   ## Discrete choice module
   #################################################
+
   # calculate vehicle sales shares and mode shares for all levels of the decisionTree
   vehSalesAndModeShares <- toolDiscreteChoice(inputData,
                                               genModelPar$lambdasDiscreteChoice,
