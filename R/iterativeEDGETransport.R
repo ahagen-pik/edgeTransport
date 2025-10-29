@@ -14,6 +14,8 @@ iterativeEdgeTransport <- function() {
   #############################################################
   ## Settings
   #############################################################
+  # bind variables locally to prevent NSE notes in R CMD CHECK
+  period <- value <- unit <- univocalName <- iteration <- type <- variable <- . <- NULL
   cfg <- sumWeight <- weight <- region <- ..cols <- vehicleType <- technology <- NULL
 
   # Set paths to folders
@@ -93,23 +95,31 @@ iterativeEdgeTransport <- function() {
   # share of electricity in Hybrid electric vehicles
   hybridElecShare <- commonParams$hybridElecShare
 
-  #############################################################
-  ## Load input data via mrtransport
-  #############################################################
-  # bind variables locally to prevent NSE notes in R CMD CHECK
-  period <- value <- unit <- univocalName <- iteration <- type <- variable <- . <- NULL
+  ###############################################################
+  ## Load input data from mrtransport if first call in REMIND run
+  ## otherwise use RDS files in EDGET folder to reload data
+  ###############################################################
 
+  if (!dir.exists(file.path(edgeTransportFolder))) {
+    inputs <- toolLoadInputs(SSPscen, transportPolScen, demScen, hybridElecShare, allEqYear)
+    }
+  else {
+    inputs <- toolReLoadInputs(edgeTransportFolder)
+  }
+
+  helpers <- inputs$helpers
+
+  #############################################################
+  ## Load fuel prices from REMIND and deaggregate if needed
+  #############################################################
 
   numberOfRegions <- length(gdx::readGDX(gdxPath, "all_regi"))
   iterationNumber <- as.vector(gdxrrw::rgdx(gdxPath, list(name = "o_iterationNumber"))$val)
 
-  inputs <- toolLoadInputs(SSPscen, transportPolScen, demScen, hybridElecShare, allEqYear)
-
-  # Can we sort that a little better? Both is needed for the standalone and the iterative version
   ## from REMIND
   REMINDfuelCosts <- toolLoadREMINDfuelCosts(gdxPath = gdxPath,
                                              hybridElecShare = hybridElecShare,
-                                             helpers = inputs$helpers,
+                                             helpers = helpers,
                                              transportFolder = file.path(".", edgeTransportFolder),
                                              iterationNumber = iterationNumber)
 
@@ -120,7 +130,7 @@ iterativeEdgeTransport <- function() {
     TestIND <- copy(REMINDfuelCosts)[region == "IND"]
 
     setnames(REMINDfuelCosts, "region", "regionCode12")
-    REMINDfuelCosts <- merge(REMINDfuelCosts, unique(inputs$helpers$regionmappingISOto21to12[, c("regionCode12", "regionCode21")]),
+    REMINDfuelCosts <- merge(REMINDfuelCosts, unique(helpers$regionmappingISOto21to12[, c("regionCode12", "regionCode21")]),
                                   by = "regionCode12", allow.cartesian = TRUE)
     REMINDfuelCosts[, "regionCode12" := NULL]
     setnames(REMINDfuelCosts, "regionCode21", "region")
@@ -137,78 +147,123 @@ iterativeEdgeTransport <- function() {
     }
   }
 
-  helpers <- inputs$helpers
-  genModelPar <- inputs$genModelPar
-  scenModelPar <- inputs$scenModelPar
-  inputDataRaw <- append(inputs$inputDataRaw, list(REMINDfuelCosts = REMINDfuelCosts))
+  ###############################################################
 
-  # If no demand scenario specific factors are applied, the demScen equals the SSPscen
-  if (is.null(scenModelPar$scenParDemFactors)) demScen <- SSPscen
+  if (!dir.exists(file.path(edgeTransportFolder))) {
 
-  ########################################################
-  ## Prepare input data and apply scenario specific changes
-  ########################################################
+    genModelPar <- inputs$genModelPar
+    scenModelPar <- inputs$scenModelPar
+    inputDataRaw <- append(inputs$inputDataRaw, list(REMINDfuelCosts = REMINDfuelCosts))
 
-  scenSpecInputData <- toolPrepareScenInputData(genModelPar,
-                                                scenModelPar,
-                                                inputDataRaw,
-                                                allEqYear,
-                                                GDPcutoff,
+    # If no demand scenario specific factors are applied, the demScen equals the SSPscen
+    if (is.null(scenModelPar$scenParDemFactors)) demScen <- SSPscen
+
+    ########################################################
+    ## Prepare input data and apply scenario specific changes
+    ########################################################
+
+    scenSpecInputData <- toolPrepareScenInputData(genModelPar,
+                                                  scenModelPar,
+                                                  inputDataRaw,
+                                                  allEqYear,
+                                                  GDPcutoff,
+                                                  helpers)
+
+    ########################################################
+    ## Calibrate historical preferences
+    ########################################################
+    histPrefs <- toolCalibrateHistPrefs(scenSpecInputData$combinedCAPEXandOPEX,
+                                        inputDataRaw$histESdemand,
+                                        inputDataRaw$timeValueCosts,
+                                        genModelPar$lambdasDiscreteChoice,
+                                        helpers)
+
+    ##########################
+    # The following lines are supposed to be deleted:
+    # overwrite historical preferences for trucks in MEA
+    pathMEA <- paste0("extdata/SWsToBeDeleted/historicalPreferencesMix2.RDS")
+    paste(pathMEA)
+    paste(system.file(pathMEA, package = "edgeTransport", mustWork = TRUE))
+    pathIND_CHA_USA <- "extdata/SWsToBeDeleted/value2010.csv"
+    overwriteIND_CHA_USA <- fread(system.file(pathIND_CHA_USA, package = "edgeTransport", mustWork = TRUE),
+                                  header = TRUE,
+                                  na.strings = "NA",
+                                  colClasses = list(character = "technology"))
+
+    overwriteMEA <- readRDS(system.file(pathMEA, package = "edgeTransport", mustWork = TRUE))
+    histPrefs$historicalPreferences[region == "MEA" & grepl("Truck", vehicleType)] <- overwriteMEA[region == "MEA" & grepl("Truck", vehicleType)]
+    histPrefs$historicalPreferences[region %in% unique(overwriteIND_CHA_USA$region) & grepl("Truck", vehicleType) & technology == "" & period %in% unique(overwriteIND_CHA_USA$period) ] <- overwriteIND_CHA_USA[region %in% unique(overwriteIND_CHA_USA$region) & grepl("Truck", vehicleType)]
+
+    # end of temporary solution
+    ##########################
+
+    scenSpecPrefTrends <- rbind(histPrefs$historicalPreferences,
+                                scenSpecInputData$scenSpecPrefTrends)
+    scenSpecPrefTrends <- toolApplyMixedTimeRes(scenSpecPrefTrends,
                                                 helpers)
 
-  ########################################################
-  ## Calibrate historical preferences
-  ########################################################
-  histPrefs <- toolCalibrateHistPrefs(scenSpecInputData$combinedCAPEXandOPEX,
-                                      inputDataRaw$histESdemand,
-                                      inputDataRaw$timeValueCosts,
-                                      genModelPar$lambdasDiscreteChoice,
-                                      helpers)
+    if (isICEban[1] | isICEban[2]) {
+      scenSpecPrefTrends <- toolApplyICEbanOnPreferences(scenSpecPrefTrends, helpers, ICEbanYears)
+    }
+    scenSpecPrefTrends <- toolNormalizePreferences(scenSpecPrefTrends)
 
-  ##########################
-  # The following lines are supposed to be deleted:
-  # overwrite historical preferences for trucks in MEA
-  pathMEA <- paste0("extdata/SWsToBeDeleted/historicalPreferencesMix2.RDS")
-  paste(pathMEA)
-  paste(system.file(pathMEA, package = "edgeTransport", mustWork = TRUE))
-  pathIND_CHA_USA <- "extdata/SWsToBeDeleted/value2010.csv"
-  overwriteIND_CHA_USA <- fread(system.file(pathIND_CHA_USA, package = "edgeTransport", mustWork = TRUE),
-                                header = TRUE,
-                                na.strings = "NA",
-                                colClasses = list(character = "technology"))
+    scenParIncoCost <- scenModelPar$scenParIncoCost
 
-  overwriteMEA <- readRDS(system.file(pathMEA, package = "edgeTransport", mustWork = TRUE))
-  histPrefs$historicalPreferences[region == "MEA" & grepl("Truck", vehicleType)] <- overwriteMEA[region == "MEA" & grepl("Truck", vehicleType)]
-  histPrefs$historicalPreferences[region %in% unique(overwriteIND_CHA_USA$region) & grepl("Truck", vehicleType) & technology == "" & period %in% unique(overwriteIND_CHA_USA$period) ] <- overwriteIND_CHA_USA[region %in% unique(overwriteIND_CHA_USA$region) & grepl("Truck", vehicleType)]
-
-  # end of temporary solution
-  ##########################
-
-  scenSpecPrefTrends <- rbind(histPrefs$historicalPreferences,
-                              scenSpecInputData$scenSpecPrefTrends)
-  scenSpecPrefTrends <- toolApplyMixedTimeRes(scenSpecPrefTrends,
-                                              helpers)
-
-  if (isICEban[1] | isICEban[2]) {
-    scenSpecPrefTrends <- toolApplyICEbanOnPreferences(scenSpecPrefTrends, helpers, ICEbanYears)
-  }
-  scenSpecPrefTrends <- toolNormalizePreferences(scenSpecPrefTrends)
-
-  #######################################################
-  # Iterative specific Input data                       #
-  #######################################################
-
-  # Data from previous EDGE-T iteration
-  fleetVehiclesPerTech <- NULL
-  pathTofleetVehiclesPerTech <- list.files(file.path(".", edgeTransportFolder),
-                                           "fleetVehiclesPerTech.RDS",
-                                           recursive = TRUE,
-                                           full.names = TRUE)
-  if (length(pathTofleetVehiclesPerTech) > 0) {
-    fleetVehiclesPerTech <- readRDS(pathTofleetVehiclesPerTech)
+    # collect all finished input data
+    inputData <- list(
+      scenSpecPrefTrends = scenSpecPrefTrends,
+      scenSpecLoadFactor = scenSpecInputData$scenSpecLoadFactor,
+      scenSpecEnIntensity = scenSpecInputData$scenSpecEnIntensity,
+      CAPEXandNonFuelOPEX = scenSpecInputData$CAPEXandNonFuelOPEX,
+      combinedCAPEXandOPEX = scenSpecInputData$combinedCAPEXandOPEX,
+      upfrontCAPEXtrackedFleet = scenSpecInputData$upfrontCAPEXtrackedFleet,
+      initialIncoCosts = scenSpecInputData$initialIncoCosts,
+      annualMileage = inputDataRaw$annualMileage,
+      timeValueCosts = inputDataRaw$timeValueCosts,
+      histESdemand = inputDataRaw$histESdemand
+    )
   }
 
-  ## Load REMIND energy service demand
+
+  ################################################################
+  # Load data from previous EDGE-T run between nash iterations   #
+  ################################################################
+
+  if (dir.exists(file.path(edgeTransportFolder))) {
+
+    genModelPar = inputs$genModelPar
+    RDSinputs = inputs$RDSinputs
+
+    combinedCAPEXandOPEX <-  toolCombineCAPEXandOPEXiterative(RDSinputs$CAPEXandNonFuelOPEX,
+                                                     REMINDfuelCosts,
+                                                     RDSinputs$scenSpecEnIntensity,
+                                                     RDSinputs$scenSpecLoadFactor,
+                                                     RDSinputs$annualMileage,
+                                                     helpers)
+
+    scenParIncoCost <- toolLoadScenParIncoCost(SSPscen, transportPolScen)
+
+    # collect all finished input data
+    inputData <- list(
+      scenSpecPrefTrends = RDSinputs$scenSpecPrefTrends,
+      scenSpecLoadFactor = RDSinputs$scenSpecLoadFactor,
+      scenSpecEnIntensity = RDSinputs$scenSpecEnIntensity,
+      CAPEXandNonFuelOPEX = RDSinputs$CAPEXandNonFuelOPEX,
+      combinedCAPEXandOPEX = combinedCAPEXandOPEX,
+      upfrontCAPEXtrackedFleet = RDSinputs$upfrontCAPEXtrackedFleet,
+      initialIncoCosts = RDSinputs$initialIncoCosts,
+      annualMileage = RDSinputs$annualMileage,
+      timeValueCosts = RDSinputs$timeValueCosts
+    )
+
+  }
+
+  #########################################################
+  #     Load REMIND energy service demand                 #
+  #     deaggregation based on ES demand                  #
+  #     from demand regression (if needed)                #
+  #########################################################
+
   REMINDsectorESdemand <- toolLoadREMINDesDemand(gdxPath, helpers)
 
   ## Check if REMINDsectorESdemand needs region deaggregation
@@ -247,7 +302,7 @@ iterativeEdgeTransport <- function() {
     setnames(REMINDsectorESdemand, "region", "regionCode12")
     # disaggregate_dt produces duplicates right now - Todo: Check fucntion
     #REMINDsectorESdemand <- rmndt::disaggregate_dt(REMINDsectorESdemand, helpers$regionmappingISOto21to12, fewcol = "regionCode12", manycol = "regionCode21",
-                                                   #datacols = dataColumns, weights = weightEs)
+    #datacols = dataColumns, weights = weightEs)
     REMINDsectorESdemand <- merge(REMINDsectorESdemand, unique(helpers$regionmappingISOto21to12[, c("regionCode12", "regionCode21")]),
                                   by = "regionCode12", allow.cartesian = TRUE)
     REMINDsectorESdemand <- merge(REMINDsectorESdemand, weightEs, intersect(names(REMINDsectorESdemand), names(weightEs)))
@@ -271,18 +326,20 @@ iterativeEdgeTransport <- function() {
     }
   }
 
-  inputData <- list(
-    scenSpecPrefTrends = scenSpecPrefTrends,
-    scenSpecLoadFactor = scenSpecInputData$scenSpecLoadFactor,
-    scenSpecEnIntensity = scenSpecInputData$scenSpecEnIntensity,
-    combinedCAPEXandOPEX = scenSpecInputData$combinedCAPEXandOPEX,
-    upfrontCAPEXtrackedFleet = scenSpecInputData$upfrontCAPEXtrackedFleet,
-    initialIncoCosts = scenSpecInputData$initialIncoCosts,
-    annualMileage = inputDataRaw$annualMileage,
-    timeValueCosts = inputDataRaw$timeValueCosts,
-    REMINDsectorESdemand = REMINDsectorESdemand,
-    histESdemand = inputDataRaw$histESdemand
-  )
+
+  #######################################################
+  # Iterative specific Input data                       #
+  #######################################################
+
+  # Data from previous EDGE-T iteration
+  fleetVehiclesPerTech <- NULL
+  pathTofleetVehiclesPerTech <- list.files(file.path(".", edgeTransportFolder),
+                                           "fleetVehiclesPerTech.RDS",
+                                           recursive = TRUE,
+                                           full.names = TRUE)
+  if (length(pathTofleetVehiclesPerTech) > 0) {
+    fleetVehiclesPerTech <- readRDS(pathTofleetVehiclesPerTech)
+  }
 
   ########################################################
   ## Prepare data for
@@ -306,7 +363,7 @@ iterativeEdgeTransport <- function() {
   # as new input for endogenous cost update
   endogenousCosts <- toolUpdateEndogenousCosts(dataEndogenousCosts,
                                                vehicleDepreciationFactors,
-                                               scenModelPar$scenParIncoCost,
+                                               scenParIncoCost,
                                                allEqYear,
                                                inputData$timeValueCosts,
                                                inputData$scenSpecPrefTrends,
@@ -321,16 +378,17 @@ iterativeEdgeTransport <- function() {
   #################################################
   ## Discrete choice module
   #################################################
+
   # calculate vehicle sales shares and mode shares for all levels of the decisionTree
   vehSalesAndModeShares <- toolDiscreteChoice(inputData,
-                                              genModelPar,
+                                              genModelPar$lambdasDiscreteChoice,
                                               endogenousCosts$updatedEndogenousCosts,
                                               helpers)
 
-  ESdemandFVsalesLevel <- toolCalculateFVdemand(inputData$REMINDsectorESdemand,
+  ESdemandFVsalesLevel <- toolCalculateFVdemand(REMINDsectorESdemand,
                                                 vehSalesAndModeShares$shares,
                                                 helpers,
-                                                inputData$histESdemand,
+                                                inputData$histESdemand, # histESdemand is optional here
                                                 baseYear)
   print("Calculation of vehicle sales and mode shares finished")
 
