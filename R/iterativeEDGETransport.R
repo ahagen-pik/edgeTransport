@@ -101,9 +101,11 @@ iterativeEdgeTransport <- function() {
   ###############################################################
 
   if (!dir.exists(file.path(edgeTransportFolder))) {
+    isFirstRun <- TRUE
     inputs <- toolLoadInputs(SSPscen, transportPolScen, demScen, hybridElecShare, allEqYear)
     }
   else {
+    isFirstRun <- FALSE
     inputs <- toolReLoadInputs(edgeTransportFolder)
   }
 
@@ -149,7 +151,7 @@ iterativeEdgeTransport <- function() {
 
   ###############################################################
 
-  if (!dir.exists(file.path(edgeTransportFolder))) {
+  if (isFirstRun) {
 
     genModelPar <- inputs$genModelPar
     scenModelPar <- inputs$scenModelPar
@@ -378,7 +380,6 @@ iterativeEdgeTransport <- function() {
   #################################################
   ## Discrete choice module
   #################################################
-
   # calculate vehicle sales shares and mode shares for all levels of the decisionTree
   vehSalesAndModeShares <- toolDiscreteChoice(inputData,
                                               genModelPar$lambdasDiscreteChoice,
@@ -425,28 +426,46 @@ iterativeEdgeTransport <- function() {
   # in the iterative version sectorESdemand comes from REMIND
   sectorESdemand <- REMINDsectorESdemand
 
-  outputRaw <- list(
-    SSPscen = SSPscen,
-    transportPolScen = transportPolScen,
-    demScen = demScen,
-    startyear = startyear,
-    gdxPath = gdxPath,
-    hybridElecShare = hybridElecShare,
-    histPrefs = histPrefs,
-    fleetSizeAndComposition = fleetSizeAndComposition,
-    endogenousCosts = endogenousCosts,
-    vehSalesAndModeShares = vehSalesAndModeShares$shares,
-    sectorESdemand = sectorESdemand,
-    ESdemandFVsalesLevel = ESdemandFVsalesLevel,
-    helpers = helpers
-  )
+  if (isFirstRun) {
+    outputRaw <- list(
+      SSPscen = SSPscen,
+      transportPolScen = transportPolScen,
+      demScen = demScen,
+      startyear = startyear,
+      gdxPath = gdxPath,
+      hybridElecShare = hybridElecShare,
+      histPrefs = histPrefs,
+      fleetSizeAndComposition = fleetSizeAndComposition,
+      endogenousCosts = endogenousCosts,
+      vehSalesAndModeShares = vehSalesAndModeShares$shares,
+      sectorESdemand = sectorESdemand,
+      ESdemandFVsalesLevel = ESdemandFVsalesLevel,
+      helpers = helpers
+    )
 
-  # not all data from inputdataRaw and inputdata is needed for the reporting,
-  # esp. histESdemand, GDP and population are only present when REMIND runs in 12regi
-  # REMINDsectorESdemand is already covered by sectorESdemand
-  add <- append(inputDataRaw[!names(inputDataRaw) %in% c("histESdemand", "GDPMER","GDPpcMER", "GDPpcPPP", "population")],
-                inputData[!names(inputData) %in% c("REMINDsectorESdemand","histESdemand", "GDPMER","GDPpcMER", "GDPpcPPP", "population")])
-  outputRaw <- append(outputRaw, add)
+    # not all data from inputdataRaw and inputdata is needed for the reporting,
+    # esp. histESdemand, GDP and population are only present when REMIND runs in 12regi
+    # REMINDsectorESdemand is already covered by sectorESdemand
+    add <- append(inputDataRaw[!names(inputDataRaw) %in% c("histESdemand", "GDPMER","GDPpcMER", "GDPpcPPP", "population")],
+                  inputData[!names(inputData) %in% c("REMINDsectorESdemand","histESdemand", "GDPMER","GDPpcMER", "GDPpcPPP", "population")])
+    outputRaw <- append(outputRaw, add)
+  }
+  else {
+   # for later iterations only store data that has been changed
+    outputRaw <- list(
+      SSPscen = SSPscen,
+      transportPolScen = transportPolScen,
+      demScen = demScen,
+      startyear = startyear,
+      gdxPath = gdxPath,
+      fleetSizeAndComposition = fleetSizeAndComposition,
+      endogenousCosts = endogenousCosts,
+      vehSalesAndModeShares = vehSalesAndModeShares$shares,
+      sectorESdemand = sectorESdemand,
+      ESdemandFVsalesLevel = ESdemandFVsalesLevel,
+      REMINDfuelCosts = REMINDfuelCosts,
+      combinedCAPEXandOPEX = combinedCAPEXandOPEX)
+  }
 
   storeData(edgeTransportFolder, outputRaw)
 
