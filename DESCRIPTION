@@ -21,7 +21,7 @@ Encoding: UTF-8
 LazyData: true
 RoxygenNote: 7.3.3
 VignetteBuilder: knitr
-Date: 2025-11-05
+Date: 2025-11-11
 Config/testthat/edition: 3
 Imports:
     rmndt,
