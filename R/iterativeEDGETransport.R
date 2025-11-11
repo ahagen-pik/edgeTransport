@@ -16,7 +16,7 @@ iterativeEdgeTransport <- function() {
   #############################################################
   # bind variables locally to prevent NSE notes in R CMD CHECK
   period <- value <- unit <- univocalName <- iteration <- type <- variable <- . <- NULL
-  cfg <- sumWeight <- weight <- region <- ..cols <- vehicleType <- technology <- NULL
+  cfg <- sumWeight <- weight <- region  <- vehicleType <- technology <- NULL
 
   # Set paths to folders
   edgeTransportFolder <- "EDGE-T"
@@ -94,6 +94,27 @@ iterativeEdgeTransport <- function() {
   baseYear <- commonParams$baseYear
   # share of electricity in Hybrid electric vehicles
   hybridElecShare <- commonParams$hybridElecShare
+
+  ###############################################################
+  ##               workshop2025 version                        ##
+  ## use pre-generated input data differentiated for           ##
+  ## two pre-specified scenarios and update folder accordingly ##
+  ###############################################################
+
+  # use transportPolScen[2] as a marker for differentiation
+  # rename fitting folder for consistency with reporting
+  # delete obsolete input folder
+  if (!dir.exists(file.path(edgeTransportFolder))) {
+    if (transportPolScen[2] == "Mix2"){
+      file.rename("EDGE-T_NPi2025", "EDGE-T")
+      unlink("EDGE-T_PkBdgt650", recursive = TRUE)
+    } else if (transportPolScen[2] == "Mix4") {
+      file.rename("EDGE-T_PkBdgt650", "EDGE-T")
+      unlink("EDGE-T_NPi2025", recursive = TRUE)
+    } else {
+      stop("Error in workshop version: pre-specified scenarios for EDGE-T not matching")
+    }
+  }
 
   ###############################################################
   ## Load input data from mrtransport if first call in REMIND run
