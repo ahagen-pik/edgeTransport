@@ -10,6 +10,7 @@
 #'
 iterativeEdgeTransport <- function() {
   print(paste("---", Sys.time(), "Start of the EDGE-T iterative model run."))
+  print(paste("---", Sys.time(), "Working directory:", getwd()))
 
   #############################################################
   ## Settings
@@ -549,7 +550,7 @@ iterativeEdgeTransport <- function() {
 
   ## CapCosts
   gdxdt::writegdx.parameter(
-    "p35_esCapCost.gdx",
+    file.path(getwd(), "p35_esCapCost.gdx"),
     f35_esCapCost,
     "p35_esCapCost",
     valcol = "value",
@@ -558,7 +559,7 @@ iterativeEdgeTransport <- function() {
 
   ## Intensities
   gdxdt::writegdx.parameter(
-    "p35_fe2es.gdx",
+    file.path(getwd(), "p35_fe2es.gdx"),
     f35_fe2es,
     "p35_fe2es",
     valcol = "value",
@@ -567,7 +568,7 @@ iterativeEdgeTransport <- function() {
 
   ## Shares: demand can represent the shares since it is normalized
   gdxdt::writegdx.parameter(
-    "p35_shFeCes.gdx",
+    file.path(getwd(), "p35_shFeCes.gdx"),
     f35_shFeCes,
     "p35_shFeCes",
     valcol = "value",
