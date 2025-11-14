@@ -10,7 +10,7 @@
 #'
 iterativeEdgeTransport <- function() {
   print(paste("---", Sys.time(), "Start of the EDGE-T iterative model run."))
-  print(paste("---", Sys.time(), "Working directory:", getwd()))
+  print(paste("Working directory:", getwd()))
 
   #############################################################
   ## Settings
