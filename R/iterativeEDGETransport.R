@@ -464,7 +464,9 @@ iterativeEdgeTransport <- function() {
       sectorESdemand = sectorESdemand,
       ESdemandFVsalesLevel = ESdemandFVsalesLevel,
       REMINDfuelCosts = REMINDfuelCosts,
-      combinedCAPEXandOPEX = combinedCAPEXandOPEX)
+      combinedCAPEXandOPEX = combinedCAPEXandOPEX,
+      # for debugging: see if RDS file from read-in changed
+      scenSpecPrefTrends = inputData$scenSpecPrefTrends)
   }
 
   storeData(edgeTransportFolder, outputRaw)
