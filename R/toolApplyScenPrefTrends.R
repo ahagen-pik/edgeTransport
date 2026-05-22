@@ -16,9 +16,14 @@ toolApplyScenPrefTrends <- function(baselinePrefTrends, scenParPrefTrends, GDPpc
   subsectorL1 <- subsectorL2 <- subsectorL3 <- technology <- NULL
 
   # function to apply mitigation factors
-  applyLogisticTrend <- function(year, final, ysymm, speed, initial = 1) {
-    fct <- exp((year - ysymm) / speed) / (exp((year - ysymm) / speed) + 1)
-    initial + fct * (final - initial)
+  # this function has the following characteristics:
+  # f(2020) = 1 independent from other values
+  # f(years) = 1 for target = 1
+  applyLogisticTrend <- function(year, target, ysymm, speed) {
+    applyLogisticTrend_inner <- function(year, target, ysymm, speed) {
+      fct <- exp((year - ysymm) / speed) / (exp((year - ysymm) / speed) + 1) * (target - 1)
+    }
+    result <- 1 + applyLogisticTrend_inner(year, final, ysymm, speed) - applyLogisticTrend_inner(2020, final, ysymm, speed)
   }
 
   # restructure mitigation factors provided in scenParPrefTrends
