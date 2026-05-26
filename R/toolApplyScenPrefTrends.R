@@ -23,7 +23,7 @@ toolApplyScenPrefTrends <- function(baselinePrefTrends, scenParPrefTrends, GDPpc
     applyLogisticTrend_inner <- function(year, target, ysymm, speed) {
       fct <- exp((year - ysymm) / speed) / (exp((year - ysymm) / speed) + 1) * (target - 1)
     }
-    result <- 1 + applyLogisticTrend_inner(year, final, ysymm, speed) - applyLogisticTrend_inner(2020, final, ysymm, speed)
+    result <- 1 + applyLogisticTrend_inner(year, target, ysymm, speed) - applyLogisticTrend_inner(2020, target, ysymm, speed)
   }
 
   # restructure mitigation factors provided in scenParPrefTrends
